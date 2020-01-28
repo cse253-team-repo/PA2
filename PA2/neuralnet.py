@@ -28,6 +28,8 @@ def normalize_data(img):
     """
     Normalize your inputs here and return them.
     """
+    img = img /255
+    print("img shape: ", img.shape)
     return img
 
 
