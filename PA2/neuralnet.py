@@ -29,7 +29,6 @@ def normalize_data(img):
     Normalize your inputs here and return them.
     """
     img = img /255
-    print("img shape: ", img.shape)
     return img
 
 
@@ -37,6 +36,9 @@ def one_hot_encoding(labels, num_classes=10):
     """
     Encode labels using one hot encoding and return them.
     """
+    one_hot = np.zeros((len(labels), num_classes))
+    one_hot[np.arange(len(labels)), labels.T] = 1
+    labels = one_hot
     return labels
 
 
@@ -66,7 +68,10 @@ def softmax(x):
     Implement the softmax function here.
     Remember to take care of the overflow condition.
     """
-    raise NotImplementedError("Softmax not implemented")
+    # raise NotImplementedError("Softmax not implemented")
+    shifted_values = x - np.max(x)
+    exp_values = np.exp(shifted_values)
+    return exp_values / np.sum(exp_values)
 
 
 class Activation():
@@ -130,37 +135,49 @@ class Activation():
         """
         Implement the sigmoid activation here.
         """
-        raise NotImplementedError("Sigmoid not implemented")
-
+        # raise NotImplementedError("Sigmoid not implemented")
+        self.x = x 
+        return 1 / (1 + np.exp(-x))
     def tanh(self, x):
         """
         Implement tanh here.
         """
-        raise NotImplementedError("Tanh not implemented")
+        # raise NotImplementedError("Tanh not implemented")
+        self.x = x
+        return 2 / (1 + np.exp(-x)) - 1
 
     def ReLU(self, x):
         """
         Implement ReLU here.
         """
-        raise NotImplementedError("ReLu not implemented")
+        # raise NotImplementedError("ReLu not implemented")
+        self.x = x
+        mask = (x >= 0)
+        return x * mask
 
     def grad_sigmoid(self):
         """
         Compute the gradient for sigmoid here.
         """
-        raise NotImplementedError("Sigmoid gradient not implemented")
+        # raise NotImplementedError("Sigmoid gradient not implemented")
+        return (1 / (1 + np.exp(-self.x))) * (1 - (1 / (1 + np.exp(-self.x))))
 
     def grad_tanh(self):
         """
         Compute the gradient for tanh here.
         """
-        raise NotImplementedError("tanh gradient not implemented")
+        # raise NotImplementedError("tanh gradient not implemented")
+        return 1 - (2 / (1 + np.exp(-self.x)) - 1) ** 2
 
     def grad_ReLU(self):
         """
         Compute the gradient for ReLU here.
         """
-        raise NotImplementedError("ReLU gradient not implemented")
+        # raise NotImplementedError("ReLU gradient not implemented")
+        mask = np.ones(self.x.shape) * (self.x > 0)
+        return mask
+        
+
 
 
 class Layer():
@@ -178,8 +195,8 @@ class Layer():
         Define the architecture and create placeholder.
         """
         np.random.seed(42)
-        self.w = None    # Declare the Weight matrix
-        self.b = None    # Create a placeholder for Bias
+        self.w = np.random.randn(in_units, out_units)    # Declare the Weight matrix
+        self.b = np.ones(out_units)    # Create a placeholder for Bias
         self.x = None    # Save the input to forward in this
         self.a = None    # Save the output of forward pass in this (without activation)
 
@@ -199,7 +216,10 @@ class Layer():
         Do not apply activation here.
         Return self.a
         """
-        raise NotImplementedError("Layer forward pass not implemented.")
+        # raise NotImplementedError("Layer forward pass not implemented.")
+        print("inputs shape: " x.shape)
+        x = np.matmul(x,self.w) + self.b
+        self.a = x
 
     def backward(self, delta):
         """
@@ -207,8 +227,11 @@ class Layer():
         computes gradient for its weights and the delta to pass to its previous layers.
         Return self.dx
         """
-        raise NotImplementedError("Backprop for Layer not implemented.")
-
+        # raise NotImplementedError("Backprop for Layer not implemented.")
+        print("delta shape: ")
+        self.d_w = self.x.T
+        self.d_b = np.sum(delta, axis=0)
+        self.d_x = self.w.T
 
 class Neuralnetwork():
     """
@@ -229,12 +252,15 @@ class Neuralnetwork():
         self.y = None        # Save the output vector of model in this
         self.targets = None  # Save the targets in forward in this variable
 
+        self.config = config
+
         # Add layers specified by layer_specs.
         for i in range(len(config['layer_specs']) - 1):
             self.layers.append(Layer(config['layer_specs'][i], config['layer_specs'][i+1]))
             if i < len(config['layer_specs']) - 2:
                 self.layers.append(Activation(config['activation']))
 
+        print("neural network layers: ", len(self.layers))
     def __call__(self, x, targets=None):
         """
         Make NeuralNetwork callable.
@@ -246,21 +272,43 @@ class Neuralnetwork():
         Compute forward pass through all the layers in the network and return it.
         If targets are provided, return loss as well.
         """
+        for i in range(len(self.layers)):
+            x = self.layers[i](x)
+        if targets == None:
+            return x 
+        else:
+            return x, self.loss(x, targets)       
+
         raise NotImplementedError("Forward not implemented for NeuralNetwork")
 
     def loss(self, logits, targets):
         '''
         compute the categorical cross-entropy loss and return it.
         '''
-        raise NotImplementedError("Loss not implemented for NeuralNetwork")
+
+        lambda_l2 = self.config['L2_penalty']
+        loss = 0
+        # raise NotImplementedError("Loss not implemented for NeuralNetwork")
+        for i in range(len(self.layers)):
+            if i % 2 == 0:
+                loss += lambda_l2 * np.linalg.norm(self.layers[i].w)
+
+        
+        labels_onehot = one_hot_encoding(targets)
+        cross_entropy = labels_onehot * np.log(softmax(logits))
+        loss += -np.mean(cross_entropy)
+        self.loss = loss
+        return loss
 
     def backward(self):
         '''
         Implement backpropagation here.
         Call backward methods of individual layer's.
         '''
-        raise NotImplementedError("Backprop not implemented for NeuralNetwork")
-
+        # raise NotImplementedError("Backprop not implemented for NeuralNetwork")
+        
+        for i in range(len(self.layers)):
+            
 
 def train(model, x_train, y_train, x_valid, y_valid, config):
     """
@@ -269,7 +317,7 @@ def train(model, x_train, y_train, x_valid, y_valid, config):
     Implement Early Stopping.
     Use config to set parameters for training like learning rate, momentum, etc.
     """
-
+    
     raise NotImplementedError("Train method not implemented")
 
 
@@ -293,7 +341,14 @@ if __name__ == "__main__":
     x_test,  y_test  = load_data(path="./", mode="t10k")
 
     # Create splits for validation data here.
-    # x_valid, y_valid = ...
+    num_train_data = x_train.shape[0]
+    split = int(num_train_data*0.2)
+    rand_id = np.random.permutation(np.arange(num_train_data))
+    val_id = rand_id[:split]
+    train_id = rand_id[split:]
+
+    x_valid, y_valid = x_train[val_id], y_train[val_id]
+    x_train, y_train = x_train[train_id], y_train[train_id]
 
     # train the model
     train(model, x_train, y_train, x_valid, y_valid, config)
