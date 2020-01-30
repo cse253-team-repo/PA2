@@ -285,17 +285,19 @@ class Neuralnetwork():
         '''
         compute the categorical cross-entropy loss and return it.
         '''
+        self.logits = logits
+        self.targets = targets
 
         lambda_l2 = self.config['L2_penalty']
         loss = 0
         # raise NotImplementedError("Loss not implemented for NeuralNetwork")
         for i in range(len(self.layers)):
             if i % 2 == 0:
-                loss += lambda_l2 * np.linalg.norm(self.layers[i].w)
+                loss += lambda_l2 * np.linalg.norm(self.layers[i].w)**2 / 2
 
         
-        labels_onehot = one_hot_encoding(targets)
-        cross_entropy = labels_onehot * np.log(softmax(logits))
+        self.labels_onehot = one_hot_encoding(targets)
+        cross_entropy = self.labels_onehot * np.log(softmax(logits))
         loss += -np.mean(cross_entropy)
         self.loss = loss
         return loss
@@ -306,9 +308,27 @@ class Neuralnetwork():
         Call backward methods of individual layer's.
         '''
         # raise NotImplementedError("Backprop not implemented for NeuralNetwork")
-        
-        for i in range(len(self.layers)):
-            
+        lr = self.config['learning_rate']
+        lambda_l2 = self.config['L2_penalty']
+
+        N = len(self.targets)
+
+        exp_logits = np.exp(self.logits)
+        sum_exp_logits = np.sum(exp_logits, axis=1)
+        factor = self.logits[:, self.targets]
+        delta = (factor * sum_exp_logits * self.labels_onehot - factor * exp_logits) / sum_exp_logits
+        delta = delta / N
+
+        for i in range(len(self.layers), -1):
+            if i%2 == 0:
+                self.layers[i].backward(delta)
+                self.layers[i].w = self.layers[i].w - lr * (self.layers[i].d_w + lambda_l2 * self.layers[i].w)
+                self.layers[i].b -= lr * self.layers[i].d_b
+                delta = np.dot(delta, self.layers[i].d_x)
+            else:
+                delta = self.layers[i].backward(delta)
+
+
 
 def train(model, x_train, y_train, x_valid, y_valid, config):
     """
@@ -317,7 +337,15 @@ def train(model, x_train, y_train, x_valid, y_valid, config):
     Implement Early Stopping.
     Use config to set parameters for training like learning rate, momentum, etc.
     """
-    
+    EPOCH = config['epoch']
+    BATCH_SIZE = config['batch_size']
+    num_batch = int(x_train.shape[0] / BATCH_SIZE)
+
+    for epoch in range(EPOCH):
+        for iter in range(num_batch-1):
+            inputs = x_train[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
+            targets = y_train[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
+            
     raise NotImplementedError("Train method not implemented")
 
 
