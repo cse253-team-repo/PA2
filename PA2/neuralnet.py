@@ -145,7 +145,7 @@ class Activation():
         """
         # raise NotImplementedError("Tanh not implemented")
         self.z = x
-        return 2 / (1 + np.exp(-x)) - 1
+        return 2 / (1 + np.exp(-2*x)) - 1
 
     def ReLU(self, x):
         """
@@ -168,14 +168,14 @@ class Activation():
         Compute the gradient for tanh here.
         """
         # raise NotImplementedError("tanh gradient not implemented")
-        return 1 - (2 / (1 + np.exp(-self.z)) - 1) ** 2
+        return 1 - (2 / (1 + np.exp(-2*self.z)) - 1) ** 2
 
     def grad_ReLU(self):
         """
         Compute the gradient for ReLU here.
         """
         # raise NotImplementedError("ReLU gradient not implemented")
-        mask = np.ones(self.x.shape) * (self.x > 0)
+        mask = np.ones(self.z.shape) * (self.z > 0)
         return mask
         
 
@@ -197,7 +197,6 @@ class Layer():
         """
         np.random.seed(42)
         self.w = np.random.randn(in_units, out_units)    # Declare the Weight matrix
-        # print("self.w ", self.w)
         self.b = np.zeros(out_units)    # Create a placeholder for Bias
         self.x = None    # Save the input to forward in this
         self.a = None    # Save the output of forward pass in this (without activation)
@@ -220,8 +219,7 @@ class Layer():
         """
         # raise NotImplementedError("Layer forward pass not implemented.")
         self.x = x
-        x = np.matmul(x,self.w) + self.b
-        self.a = x
+        self.a = np.matmul(x,self.w) + self.b
 
     def backward(self, delta):
         """
@@ -279,7 +277,7 @@ class Neuralnetwork():
                 x = self.layers[i].a
             else:
                 x = self.layers[i](x)
-        if targets == None:
+        if type(targets) == None:
             return x 
         else:
             return x, self.loss(x, targets)       
@@ -373,8 +371,6 @@ def train(model, x_train, y_train, x_valid, y_valid, config):
             acc = np.sum((preds_one_hot*targets))/BATCH_SIZE
             train_loss_his.append(loss)
             train_acc_his.append(acc)
-
-
         
         # final batch
         inputs = x_train[iter*BATCH_SIZE:]
@@ -383,17 +379,48 @@ def train(model, x_train, y_train, x_valid, y_valid, config):
         
         outputs = model(inputs)
         loss = model.loss(outputs, targets)
+
+        model.backward()
         
         preds_one_hot = one_hot_encoding(np.argmax(outputs, axis=1))
-        acc = np.sum((preds_one_hot*targets))/BATCH_SIZE
+        acc = np.sum((preds_one_hot*targets))/final_size
         train_loss_his.append(loss)
         train_acc_his.append(acc)
 
         train_loss_mean = np.mean(np.array(train_loss_his))
         train_acc_mean = np.mean(np.array(train_acc_his))
-        print("train acc: ", train_acc_mean)
 
+        for iter in range(num_batch_val-1):
+            inputs = x_valid[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
+            targets = y_valid[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
 
+            outputs = model(inputs)
+            loss = model.loss(outputs, targets)
+
+            preds_one_hot = one_hot_encoding(np.argmax(outputs, axis=1))
+            acc = np.sum((preds_one_hot*targets)) / BATCH_SIZE
+
+            val_loss_his.append(loss)
+            val_acc_his.append(acc)
+        
+        # final batch
+        inputs = x_valid[iter*BATCH_SIZE:]
+        targets = y_valid[iter*BATCH_SIZE:]
+        final_size = inputs.shape[0]
+        
+        outputs = model(inputs)
+        loss = model.loss(outputs, targets)
+        
+        preds_one_hot = one_hot_encoding(np.argmax(outputs, axis=1))
+        acc = np.sum((preds_one_hot*targets))/final_size
+        val_loss_his.append(loss)
+        val_acc_his.append(acc)
+
+        val_loss_mean = np.mean(np.array(val_loss_his))
+        val_acc_mean = np.mean(np.array(val_acc_his))
+
+        print("val acc: ", val_acc_mean)
+            
     # raise NotImplementedError("Train method not implemented")
 
 
@@ -402,6 +429,37 @@ def test(model, X_test, y_test):
     Calculate and return the accuracy on the test set.
     """
 
+    batch_size = 128
+    num_batch_test = int(X_test.shape[0] / batch_size)
+    
+    test_acc_his = []
+
+    for i in range(num_batch_test):
+        inputs = X_test[i*batch_size: (i+1)*batch_size]
+        targets = y_test[i*batch_size: (i+1)*batch_size]
+
+        outputs = model(inputs)
+        
+        preds_one_hot = one_hot_encoding(np.argmax(outputs, axis=1))
+        acc = np.sum((preds_one_hot * targets)) / batch_size
+
+        test_acc_his.append(acc)
+    
+    inputs = X_test[i*batch_size:]
+    targets = y_test[i*batch_size:]
+    
+    final_size = inputs.shape[0]
+
+    outputs = model(inputs)
+
+    preds_one_hot = one_hot_encoding(np.argmax(outputs, axis=1))
+    acc = np.sum((preds_one_hot * targets)) / batch_size
+    test_acc_his.append(acc)
+
+    test_acc_mean = np.mean(np.array(test_acc_his))
+    print("test acc: ", test_acc_mean)
+
+    return test_acc_mean
     raise NotImplementedError("Test method not implemented")
 
 
