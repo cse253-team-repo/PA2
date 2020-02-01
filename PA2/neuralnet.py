@@ -136,50 +136,49 @@ class Activation():
         """
         Implement the sigmoid activation here.
         """
-        # raise NotImplementedError("Sigmoid not implemented")
         self.z = x 
         return 1 / (1 + np.exp(-x))
+        raise NotImplementedError("Sigmoid not implemented")
+
     def tanh(self, x):
         """
         Implement tanh here.
         """
-        # raise NotImplementedError("Tanh not implemented")
         self.z = x
         return 2 / (1 + np.exp(-2*x)) - 1
+        raise NotImplementedError("Tanh not implemented")
 
     def ReLU(self, x):
         """
         Implement ReLU here.
         """
-        # raise NotImplementedError("ReLu not implemented")
+        x = x / (np.max(x)-np.min(x))
         self.z = x
-        mask = (x >= 0)
+        mask = (x > 0)
         return x * mask
+        raise NotImplementedError("ReLu not implemented")
 
     def grad_sigmoid(self):
         """
         Compute the gradient for sigmoid here.
         """
-        # raise NotImplementedError("Sigmoid gradient not implemented")
         return (1 / (1 + np.exp(-self.z))) * (1 - (1 / (1 + np.exp(-self.z))))
+        raise NotImplementedError("Sigmoid gradient not implemented")
 
     def grad_tanh(self):
         """
         Compute the gradient for tanh here.
         """
-        # raise NotImplementedError("tanh gradient not implemented")
         return 1 - (2 / (1 + np.exp(-2*self.z)) - 1) ** 2
+        raise NotImplementedError("Sigmoid gradient not implemented")
 
     def grad_ReLU(self):
         """
         Compute the gradient for ReLU here.
         """
-        # raise NotImplementedError("ReLU gradient not implemented")
         mask = np.ones(self.z.shape) * (self.z > 0)
         return mask
-        
-
-
+        raise NotImplementedError("Sigmoid gradient not implemented")
 
 class Layer():
     """
@@ -219,7 +218,7 @@ class Layer():
         """
         # raise NotImplementedError("Layer forward pass not implemented.")
         self.x = x
-        self.a = np.matmul(x,self.w) + self.b
+        self.a = np.dot(x,self.w) + self.b
 
     def backward(self, delta):
         """
@@ -277,10 +276,11 @@ class Neuralnetwork():
                 x = self.layers[i].a
             else:
                 x = self.layers[i](x)
-        if targets == None:
-            return x 
+        if type(targets) != type(None):
+            return x, self.loss(x, targets)      
         else:
-            return x, self.loss(x, targets)       
+
+            return x 
 
         raise NotImplementedError("Forward not implemented for NeuralNetwork")
 
@@ -297,8 +297,7 @@ class Neuralnetwork():
         for i in range(len(self.layers)):
             if i % 2 == 0:
                 loss += lambda_l2 * np.linalg.norm(self.layers[i].w)**2 / 2
-        
-
+        # print("logits; ", logits)
         cross_entropy = targets * np.log(softmax(logits))
         loss += -np.mean(cross_entropy)
         # print("loss: ", loss)
@@ -332,7 +331,6 @@ class Neuralnetwork():
     def update(self):
         lr = self.config['learning_rate']
         lambda_l2 = self.config['L2_penalty']
-        delta = self.delta
         for i in range(len(self.layers)-1, -1, -1):
             if i%2 == 0:
                 self.layers[i].w = self.layers[i].w + lr * (self.layers[i].d_w + lambda_l2 * self.layers[i].w)
@@ -368,6 +366,7 @@ def train(model, x_train, y_train, x_valid, y_valid, config):
             targets = y_train[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
 
             outputs = model(inputs)
+            # print("outputs: ", outputs)
             loss = model.loss(outputs, targets)
 
             model.backward()
@@ -473,7 +472,6 @@ def test(model, X_test, y_test):
 if __name__ == "__main__":
     # Load the configuration.
     config = load_config("./")
-    print("config: ", config)
 
     # Create the model
     model  = Neuralnetwork(config)

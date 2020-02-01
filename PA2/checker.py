@@ -134,9 +134,8 @@ def sanity_network(data, default_config):
 if __name__ == '__main__':
     # Load the data and configuration.
     sanity_data    = get_data("./")
+    print("sanity data: ", sanity_data)
     default_config = load_config("./")
-    print("mmp: ", sanity_data['nnet'].layers[0].w[0])
-
     # Run Sanity.
     sanity_layers(sanity_data)
     sanity_network(sanity_data, default_config)
