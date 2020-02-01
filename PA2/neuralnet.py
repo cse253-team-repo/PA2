@@ -277,7 +277,7 @@ class Neuralnetwork():
                 x = self.layers[i].a
             else:
                 x = self.layers[i](x)
-        if type(targets) == None:
+        if targets == None:
             return x 
         else:
             return x, self.loss(x, targets)       
@@ -335,12 +335,9 @@ class Neuralnetwork():
         delta = self.delta
         for i in range(len(self.layers)-1, -1, -1):
             if i%2 == 0:
-                # self.layers[i].backward(delta)
                 self.layers[i].w = self.layers[i].w + lr * (self.layers[i].d_w + lambda_l2 * self.layers[i].w)
                 self.layers[i].b += lr * self.layers[i].d_b
-                delta = self.layers[i].d_x
             else:
-                # delta = self.layers[i].backward(delta)
                 pass
 
 def train(model, x_train, y_train, x_valid, y_valid, config):
