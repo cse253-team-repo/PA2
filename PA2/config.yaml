@@ -2,10 +2,10 @@
 layer_specs: [784, 100, 100, 10]
 
 # Type of non-linear activation function to be used for the layers.
-activation: "ReLU"
+activation: "sigmoid"
 
 # The learning rate to be used for training.
-learning_rate: 0.01
+learning_rate: 0.005
 
 # Number of training samples per batch to be passed to network
 batch_size: 128
@@ -23,7 +23,7 @@ early_stop_epoch: 5
 L2_penalty: 0
 
 # Use momentum for training
-momentum: True
+momentum: False
 
 # Value for the parameter 'gamma' in momentum
 momentum_gamma: 0.9

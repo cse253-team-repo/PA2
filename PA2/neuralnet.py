@@ -60,7 +60,7 @@ def load_data(path, mode='train'):
     normalized_images = normalize_data(images)
     one_hot_labels    = one_hot_encoding(labels, num_classes=10)
 
-    return normalized_images, one_hot_labels
+    return normalized_images, one_hot_labels, labels
 
 
 def softmax(x):
@@ -227,10 +227,16 @@ class Layer():
         Return self.dx
         """
         # raise NotImplementedError("Backprop for Layer not implemented.")
+        print("delta shape: ", delta.shape)
+        print("x shape: ", self.x.shape)
+        print("w shape: ", self.w.shape)
+
         self.d_w = np.dot(self.x.T, delta)
-        # print("dw: ", self.d_w)
         self.d_b = np.sum(delta, axis=0)
         self.d_x = np.dot(delta, self.w.T)
+
+        print("d_w shape: ", self.d_w.shape)
+        print("d_x shape: ", self.d_x.shape)
 
 class Neuralnetwork():
     """
@@ -252,7 +258,11 @@ class Neuralnetwork():
         self.targets = None  # Save the targets in forward in this variable
 
         self.config = config
-
+        self.momentum = self.config['momentum']
+        if self.momentum:
+            self.gamma = self.config['momentum_gamma']
+            self.v_w = [0] * (len(config['layer_specs'])+1)
+            self.v_b = [0] * (len(config['layer_specs'])+1)
         # Add layers specified by layer_specs.
         for i in range(len(config['layer_specs']) - 1):
             self.layers.append(Layer(config['layer_specs'][i], config['layer_specs'][i+1]))
@@ -292,19 +302,18 @@ class Neuralnetwork():
         self.targets = targets
 
         lambda_l2 = self.config['L2_penalty']
-        loss = 0
+        loss_value = 0
         # raise NotImplementedError("Loss not implemented for NeuralNetwork")
         for i in range(len(self.layers)):
             if i % 2 == 0:
-                loss += lambda_l2 * np.linalg.norm(self.layers[i].w)**2 / 2
-        # print("logits; ", logits)
-        cross_entropy = targets * np.log(softmax(logits))
-        loss += -np.mean(cross_entropy)
-        # print("loss: ", loss)
-        self.loss_value = loss
+                loss_value += lambda_l2 * np.linalg.norm(self.layers[i].w)**2 / 2
+        
+        cross_entropy = - np.mean(targets * np.log(softmax(logits)))
+
+        loss_value += cross_entropy
         self.targets = targets
 
-        return loss
+        return loss_value
 
     def backward(self):
         '''
@@ -314,9 +323,9 @@ class Neuralnetwork():
         # raise NotImplementedError("Backprop not implemented for NeuralNetwork")
 
         N = len(self.targets)
-        # shifted_values = self.logits - np.max(self.logits)
-        # exp_logits = np.exp(shifted_values)
-        exp_logits = np.exp(self.logits)
+        shifted_values = self.logits - np.max(self.logits)
+        exp_logits = np.exp(shifted_values)
+        # exp_logits = np.exp(self.logits)
         sum_exp_logits = np.sum(exp_logits, axis=1)
         delta = ((sum_exp_logits).reshape(-1,1) * self.targets - exp_logits) / sum_exp_logits.reshape(-1,1)
         # print("delta: ", delta)
@@ -331,14 +340,25 @@ class Neuralnetwork():
     def update(self):
         lr = self.config['learning_rate']
         lambda_l2 = self.config['L2_penalty']
-        for i in range(len(self.layers)-1, -1, -1):
-            if i%2 == 0:
-                self.layers[i].w = self.layers[i].w + lr * (self.layers[i].d_w + lambda_l2 * self.layers[i].w)
-                self.layers[i].b += lr * self.layers[i].d_b
-            else:
-                pass
+        if self.momentum:
+            for i in range(len(self.layers)-1, -1, -1):
+                if i%2 == 0:
+                    self.v_w[i] = self.gamma * self.v_w[i] + (1-self.gamma) * (self.layers[i].d_w + lambda_l2 * self.layers[i].w)
+                    self.layers[i].w += lr * self.v_w[i]
 
-def train(model, x_train, y_train, x_valid, y_valid, config):
+                    self.v_b[i] = self.gamma * self.v_b[i] + (1-self.gamma) * (self.layers[i].d_b)
+                    self.layers[i].b += lr * self.v_b[i]
+                else:
+                    pass
+        else:
+            for i in range(len(self.layers)-1, -1, -1):
+                if i%2 == 0:
+                    self.layers[i].w += lr * (self.layers[i].d_w + lambda_l2 * self.layers[i].w)
+                    self.layers[i].b += lr * self.layers[i].d_b
+                else:
+                    pass
+
+def train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid, config):
     """
     Train your model here.
     Implement batch SGD to train the model.
@@ -364,37 +384,46 @@ def train(model, x_train, y_train, x_valid, y_valid, config):
         for iter in range(num_batch_train-1):
             inputs = x_train[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
             targets = y_train[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
+            labels = labels_train[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
 
             outputs = model(inputs)
-            # print("outputs: ", outputs)
+            preds = np.argmax(outputs, axis=1)
+
             loss = model.loss(outputs, targets)
 
             model.backward()
             model.update()
 
-            preds_one_hot = one_hot_encoding(np.argmax(outputs, axis=1))
-            acc = np.sum((preds_one_hot*targets))/BATCH_SIZE
+            # preds_one_hot = one_hot_encoding(np.argmax(outputs, axis=1))
+            # acc = np.sum((preds_one_hot*targets))/BATCH_SIZE
+            acc = np.mean((preds == labels))
             train_loss_his.append(loss)
             train_acc_his.append(acc)
         
         # final batch
         inputs = x_train[iter*BATCH_SIZE:]
         targets = y_train[iter*BATCH_SIZE:]
+        labels = labels_train[iter*BATCH_SIZE:]
         final_size = inputs.shape[0]
         
         outputs = model(inputs)
+        preds = np.argmax(outputs, axis=1)
+
         loss = model.loss(outputs, targets)
 
         model.backward()
         model.update()
         
-        preds_one_hot = one_hot_encoding(np.argmax(outputs, axis=1))
-        acc = np.sum((preds_one_hot*targets))/final_size
+        # preds_one_hot = one_hot_encoding(np.argmax(outputs, axis=1))
+        # acc = np.sum((preds_one_hot*targets))/final_size
+        acc = np.mean((preds==labels))
+
         train_loss_his.append(loss)
         train_acc_his.append(acc)
 
         train_loss_mean = np.mean(np.array(train_loss_his))
         train_acc_mean = np.mean(np.array(train_acc_his))
+        print("train loss: ", train_loss_mean)
 
         for iter in range(num_batch_val-1):
             inputs = x_valid[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
@@ -425,7 +454,7 @@ def train(model, x_train, y_train, x_valid, y_valid, config):
         val_loss_mean = np.mean(np.array(val_loss_his))
         val_acc_mean = np.mean(np.array(val_acc_his))
 
-        print("val acc: ", val_acc_mean)
+        # print("val loss: ", val_loss_mean)
             
     # raise NotImplementedError("Train method not implemented")
 
@@ -468,6 +497,32 @@ def test(model, X_test, y_test):
     return test_acc_mean
     raise NotImplementedError("Test method not implemented")
 
+def grad_check(model, model_1, model_2,  x_train, labels_train, config):
+    for j in range(10):
+        sample = x_train[np.where(labels_train==j)[0][5]].reshape(1,-1)
+        targets = np.array([j])
+
+        outputs = model(sample)
+        loss = model.loss(outputs, targets)
+        x=7
+        # numeric gradient
+        for i in range(len(model.layers)-1, -1, -1):
+            if i%2 == 0:
+                model_1.layers[i].w[x][x] = model_1.layers[i].w[x][x] + 1e-2
+                model_2.layers[i].w[x][x] = model_2.layers[i].w[x][x] - 1e-2
+                outputs_1, outputs_2 = model_1(sample), model_2(sample)
+                loss_1, loss_2 = model_1.loss(outputs_1, targets), model_2.loss(outputs_2, targets)
+                delta_loss = loss_1 - loss_2
+                numeric_grad = delta_loss / 2e-2
+
+                model.backward()
+                auto_grad = model.layers[i].d_w[x][x]
+                print("grad difference: ", auto_grad - numeric_grad)
+
+            else:
+                pass
+
+        model.backward()
 
 if __name__ == "__main__":
     # Load the configuration.
@@ -475,10 +530,12 @@ if __name__ == "__main__":
 
     # Create the model
     model  = Neuralnetwork(config)
+    model_1  = Neuralnetwork(config)
+    model_2  = Neuralnetwork(config)
 
     # Load the data
-    x_train, y_train = load_data(path="./", mode="train")
-    x_test,  y_test  = load_data(path="./", mode="t10k")
+    x_train, y_train, labels_train = load_data(path="./", mode="train")
+    x_test,  y_test, labels_test  = load_data(path="./", mode="t10k")
 
     # Create splits for validation data here.
     num_train_data = x_train.shape[0]
@@ -487,10 +544,12 @@ if __name__ == "__main__":
     val_id = rand_id[:split]
     train_id = rand_id[split:]
 
-    x_valid, y_valid = x_train[val_id], y_train[val_id]
-    x_train, y_train = x_train[train_id], y_train[train_id]
+    x_valid, y_valid, labels_valid = x_train[val_id], y_train[val_id], labels_train[val_id]
+    x_train, y_train, labels_train = x_train[train_id], y_train[train_id], labels_train[train_id]
 
+    # gradient check 
+    grad_check(model, model_1, model_2, x_train, labels_train, config)
     # train the model
-    train(model, x_train, y_train, x_valid, y_valid, config)
+    # train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid, config)
 
-    test_acc = test(model, x_test, y_test)
+    # test_acc = test(model, x_test, y_test)
