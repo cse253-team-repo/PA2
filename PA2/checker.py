@@ -135,6 +135,7 @@ if __name__ == '__main__':
     # Load the data and configuration.
     sanity_data    = get_data("./")
     default_config = load_config("./")
+    print("mmp: ", sanity_data['nnet'].layers[0].w[0])
 
     # Run Sanity.
     sanity_layers(sanity_data)

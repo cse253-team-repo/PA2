@@ -313,8 +313,6 @@ class Neuralnetwork():
         Call backward methods of individual layer's.
         '''
         # raise NotImplementedError("Backprop not implemented for NeuralNetwork")
-        lr = self.config['learning_rate']
-        lambda_l2 = self.config['L2_penalty']
 
         N = len(self.targets)
         # shifted_values = self.logits - np.max(self.logits)
@@ -322,18 +320,28 @@ class Neuralnetwork():
         exp_logits = np.exp(self.logits)
         sum_exp_logits = np.sum(exp_logits, axis=1)
         delta = ((sum_exp_logits).reshape(-1,1) * self.targets - exp_logits) / sum_exp_logits.reshape(-1,1)
-        delta = - delta / N
         # print("delta: ", delta)
-
+        self.delta = delta
         for i in range(len(self.layers)-1, -1, -1):
             if i%2 == 0:
                 self.layers[i].backward(delta)
-                self.layers[i].w = self.layers[i].w - lr * (self.layers[i].d_w + lambda_l2 * self.layers[i].w)
-                self.layers[i].b -= lr * self.layers[i].d_b
                 delta = self.layers[i].d_x
             else:
                 delta = self.layers[i].backward(delta)
-
+    
+    def update(self):
+        lr = self.config['learning_rate']
+        lambda_l2 = self.config['L2_penalty']
+        delta = self.delta
+        for i in range(len(self.layers)-1, -1, -1):
+            if i%2 == 0:
+                # self.layers[i].backward(delta)
+                self.layers[i].w = self.layers[i].w + lr * (self.layers[i].d_w + lambda_l2 * self.layers[i].w)
+                self.layers[i].b += lr * self.layers[i].d_b
+                delta = self.layers[i].d_x
+            else:
+                # delta = self.layers[i].backward(delta)
+                pass
 
 def train(model, x_train, y_train, x_valid, y_valid, config):
     """
@@ -366,6 +374,7 @@ def train(model, x_train, y_train, x_valid, y_valid, config):
             loss = model.loss(outputs, targets)
 
             model.backward()
+            model.update()
 
             preds_one_hot = one_hot_encoding(np.argmax(outputs, axis=1))
             acc = np.sum((preds_one_hot*targets))/BATCH_SIZE
@@ -381,6 +390,7 @@ def train(model, x_train, y_train, x_valid, y_valid, config):
         loss = model.loss(outputs, targets)
 
         model.backward()
+        model.update()
         
         preds_one_hot = one_hot_encoding(np.argmax(outputs, axis=1))
         acc = np.sum((preds_one_hot*targets))/final_size
