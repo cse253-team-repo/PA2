@@ -72,7 +72,7 @@ def softmax(x):
     shifted_values = x - np.max(x)
     # print("shifted values: ", shifted_values)
     exp_values = np.exp(shifted_values)
-    return exp_values / np.sum(exp_values)
+    return exp_values / np.sum(exp_values, axis=1).reshape(-1,1)
 
 
 class Activation():
@@ -154,7 +154,7 @@ class Activation():
         """
         x = x / (np.max(x)-np.min(x))
         self.z = x
-        mask = (x > 0)
+        mask = (x >= 0)
         return x * mask
         raise NotImplementedError("ReLu not implemented")
 
@@ -227,16 +227,9 @@ class Layer():
         Return self.dx
         """
         # raise NotImplementedError("Backprop for Layer not implemented.")
-        print("delta shape: ", delta.shape)
-        print("x shape: ", self.x.shape)
-        print("w shape: ", self.w.shape)
-
         self.d_w = np.dot(self.x.T, delta)
         self.d_b = np.sum(delta, axis=0)
         self.d_x = np.dot(delta, self.w.T)
-
-        print("d_w shape: ", self.d_w.shape)
-        print("d_x shape: ", self.d_x.shape)
 
 class Neuralnetwork():
     """
@@ -307,7 +300,6 @@ class Neuralnetwork():
         for i in range(len(self.layers)):
             if i % 2 == 0:
                 loss_value += lambda_l2 * np.linalg.norm(self.layers[i].w)**2 / 2
-        
         cross_entropy = - np.mean(targets * np.log(softmax(logits)))
 
         loss_value += cross_entropy
@@ -323,13 +315,18 @@ class Neuralnetwork():
         # raise NotImplementedError("Backprop not implemented for NeuralNetwork")
 
         N = len(self.targets)
-        shifted_values = self.logits - np.max(self.logits)
-        exp_logits = np.exp(shifted_values)
-        # exp_logits = np.exp(self.logits)
+        # shifted_values = self.logits - np.max(self.logits)
+        # exp_logits = np.exp(shifted_values)
+        exp_logits = np.exp(self.logits)
         sum_exp_logits = np.sum(exp_logits, axis=1)
+        # # print("sum_Exp_logits: ", sum_exp_logits)
         delta = ((sum_exp_logits).reshape(-1,1) * self.targets - exp_logits) / sum_exp_logits.reshape(-1,1)
         # print("delta: ", delta)
-        self.delta = delta
+        # print("targets shape: ", self.targets.shape)
+        # print("porb shape: ", softmax(self.logits).shape)
+        # delta = self.targets - softmax(self.logits)
+        # delta = -delta
+        # self.delta = delta
         for i in range(len(self.layers)-1, -1, -1):
             if i%2 == 0:
                 self.layers[i].backward(delta)
@@ -370,27 +367,26 @@ def train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid,
     num_batch_train = int(x_train.shape[0] / BATCH_SIZE)
     num_batch_val = int(x_valid.shape[0] / BATCH_SIZE)
 
-    train_loss_his = []
-    train_acc_his = []
-    
-    val_loss_his = []
-    val_acc_his = []
-
     for epoch in range(EPOCH):
-
+        train_loss_his = []
+        train_acc_his = []
+        
+        val_loss_his = []
+        val_acc_his = []
         #########################################################################
         ##########################       TRAINING         #######################
         #########################################################################
         for iter in range(num_batch_train-1):
+            loss = 0
             inputs = x_train[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
             targets = y_train[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
             labels = labels_train[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
 
             outputs = model(inputs)
-            preds = np.argmax(outputs, axis=1)
+            prob = softmax(outputs)
+            preds = np.argmax(prob, axis=1)
 
             loss = model.loss(outputs, targets)
-
             model.backward()
             model.update()
 
@@ -399,8 +395,11 @@ def train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid,
             acc = np.mean((preds == labels))
             train_loss_his.append(loss)
             train_acc_his.append(acc)
-        
+            
+            
+        '''
         # final batch
+        loss = 0
         inputs = x_train[iter*BATCH_SIZE:]
         targets = y_train[iter*BATCH_SIZE:]
         labels = labels_train[iter*BATCH_SIZE:]
@@ -420,7 +419,8 @@ def train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid,
 
         train_loss_his.append(loss)
         train_acc_his.append(acc)
-
+        '''
+        
         train_loss_mean = np.mean(np.array(train_loss_his))
         train_acc_mean = np.mean(np.array(train_acc_his))
         print("train loss: ", train_loss_mean)
@@ -498,13 +498,15 @@ def test(model, X_test, y_test):
     raise NotImplementedError("Test method not implemented")
 
 def grad_check(model, model_1, model_2,  x_train, labels_train, config):
-    for j in range(10):
+    for j in range(1):
         sample = x_train[np.where(labels_train==j)[0][5]].reshape(1,-1)
         targets = np.array([j])
 
         outputs = model(sample)
         loss = model.loss(outputs, targets)
         x=7
+        model.backward()
+        
         # numeric gradient
         for i in range(len(model.layers)-1, -1, -1):
             if i%2 == 0:
@@ -515,7 +517,6 @@ def grad_check(model, model_1, model_2,  x_train, labels_train, config):
                 delta_loss = loss_1 - loss_2
                 numeric_grad = delta_loss / 2e-2
 
-                model.backward()
                 auto_grad = model.layers[i].d_w[x][x]
                 print("grad difference: ", auto_grad - numeric_grad)
 
@@ -548,8 +549,8 @@ if __name__ == "__main__":
     x_train, y_train, labels_train = x_train[train_id], y_train[train_id], labels_train[train_id]
 
     # gradient check 
-    grad_check(model, model_1, model_2, x_train, labels_train, config)
+    # grad_check(model, model_1, model_2, x_train, labels_train, config)
     # train the model
-    # train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid, config)
+    train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid, config)
 
     # test_acc = test(model, x_test, y_test)
