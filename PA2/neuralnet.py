@@ -69,7 +69,7 @@ def softmax(x):
     Remember to take care of the overflow condition.
     """
     # raise NotImplementedError("Softmax not implemented")
-    shifted_values = x - np.max(x)
+    shifted_values = x - np.max(x, axis=1).reshape(-1,1)
     # print("shifted values: ", shifted_values)
     exp_values = np.exp(shifted_values)
     return exp_values / np.sum(exp_values, axis=1).reshape(-1,1)
@@ -340,7 +340,7 @@ class Neuralnetwork():
         if self.momentum:
             for i in range(len(self.layers)-1, -1, -1):
                 if i%2 == 0:
-                    self.v_w[i] = self.gamma * self.v_w[i] + (1-self.gamma) * (self.layers[i].d_w + lambda_l2 * self.layers[i].w)
+                    self.v_w[i] = self.gamma * self.v_w[i] + (1-self.gamma) * (self.layers[i].d_w - lambda_l2 * self.layers[i].w)
                     self.layers[i].w += lr * self.v_w[i]
 
                     self.v_b[i] = self.gamma * self.v_b[i] + (1-self.gamma) * (self.layers[i].d_b)
@@ -350,7 +350,7 @@ class Neuralnetwork():
         else:
             for i in range(len(self.layers)-1, -1, -1):
                 if i%2 == 0:
-                    self.layers[i].w += lr * (self.layers[i].d_w + lambda_l2 * self.layers[i].w)
+                    self.layers[i].w += lr * (self.layers[i].d_w - lambda_l2 * self.layers[i].w)
                     self.layers[i].b += lr * self.layers[i].d_b
                 else:
                     pass
@@ -396,8 +396,6 @@ def train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid,
             train_loss_his.append(loss)
             train_acc_his.append(acc)
             
-            
-        '''
         # final batch
         loss = 0
         inputs = x_train[iter*BATCH_SIZE:]
@@ -419,11 +417,9 @@ def train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid,
 
         train_loss_his.append(loss)
         train_acc_his.append(acc)
-        '''
         
         train_loss_mean = np.mean(np.array(train_loss_his))
         train_acc_mean = np.mean(np.array(train_acc_his))
-        print("train loss: ", train_loss_mean)
 
         for iter in range(num_batch_val-1):
             inputs = x_valid[iter*BATCH_SIZE:(iter+1)*BATCH_SIZE]
@@ -454,7 +450,7 @@ def train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid,
         val_loss_mean = np.mean(np.array(val_loss_his))
         val_acc_mean = np.mean(np.array(val_acc_his))
 
-        # print("val loss: ", val_loss_mean)
+        print("val acc: ", val_acc_mean)
             
     # raise NotImplementedError("Train method not implemented")
 
@@ -498,17 +494,18 @@ def test(model, X_test, y_test):
     raise NotImplementedError("Test method not implemented")
 
 def grad_check(model, model_1, model_2,  x_train, labels_train, config):
-    for j in range(1):
+    for j in range(10):
         sample = x_train[np.where(labels_train==j)[0][5]].reshape(1,-1)
         targets = np.array([j])
 
         outputs = model(sample)
         loss = model.loss(outputs, targets)
-        x=7
+        x=3
         model.backward()
         
         # numeric gradient
         for i in range(len(model.layers)-1, -1, -1):
+        # for i in range(2):
             if i%2 == 0:
                 model_1.layers[i].w[x][x] = model_1.layers[i].w[x][x] + 1e-2
                 model_2.layers[i].w[x][x] = model_2.layers[i].w[x][x] - 1e-2
@@ -516,9 +513,13 @@ def grad_check(model, model_1, model_2,  x_train, labels_train, config):
                 loss_1, loss_2 = model_1.loss(outputs_1, targets), model_2.loss(outputs_2, targets)
                 delta_loss = loss_1 - loss_2
                 numeric_grad = delta_loss / 2e-2
+                # print("delta loss: ", delta_loss)
 
                 auto_grad = model.layers[i].d_w[x][x]
                 print("grad difference: ", auto_grad - numeric_grad)
+
+                model_1.layers[i].w[x][x] = model_1.layers[i].w[x][x] - 1e-2
+                model_2.layers[i].w[x][x] = model_2.layers[i].w[x][x] + 1e-2
 
             else:
                 pass
@@ -549,8 +550,8 @@ if __name__ == "__main__":
     x_train, y_train, labels_train = x_train[train_id], y_train[train_id], labels_train[train_id]
 
     # gradient check 
-    # grad_check(model, model_1, model_2, x_train, labels_train, config)
+    grad_check(model, model_1, model_2, x_train, labels_train, config)
     # train the model
-    train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid, config)
+    # train(model, x_train, y_train, x_valid, y_valid, labels_train, labels_valid, config)
 
     # test_acc = test(model, x_test, y_test)
